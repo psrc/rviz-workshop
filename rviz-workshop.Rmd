@@ -5,9 +5,11 @@ output:
     theme: readable
 ---
 
+Hana &#352;ev&#269;&#237;kov&#225;, Christy Lam
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-ntd.file <- "ntd-monthly-January2017.xls"
+ntd.file <- "ntd-monthly-February2017.xls"
 ev <- FALSE
 ```
 
@@ -34,15 +36,17 @@ download.ntd <- function(month, year) {
     url <- "https://www.transit.dot.gov/sites/fta.dot.gov/files/"
     url.file <- paste0(url, month, "%20", year, "%20Adjusted%20Database.xls")
     local.file <- paste0("ntd-monthly-", month, year, '.xls')
-    download.file(url.file, local.file)
+    download.file(url.file, local.file, mode="wb")
     return(local.file)
 }
 ```
 
-Load an NTD dataset for January 2017:
+The argument ``mode="wb"`` specifies that it is a binary file and thus, should be loaded in binary mode. If your file is an ASCII (text) file, remove that argument.
+
+Load an NTD dataset for February 2017:
 
 ```{r eval=ev}
-month <- "January"
+month <- "February"
 year <- 2017
 ```
 
@@ -55,8 +59,191 @@ Read the UPT sheet:
 ```{r eval=ev, results="hide"}
 library(readxl)
 excel_sheets(ntd.file)
-df <- read_excel(ntd.file, sheet="UPT")
+ds <- read_excel(ntd.file, sheet="UPT")
+```
+
+```{r eval=FALSE}
+View(ds)
+```
+
+# Data Manipulation
+
+Convert to data frame:
+
+```{r eval=ev}
+class(ds)
+df <- as.data.frame(ds)
+class(df)
+dim(df)
+```
+
+Reduce the number of rows by extracting relevant operators:
+
+```{r eval=ev}
+operators <- c(1, 3, 5, 20, 23, 28, 29, 35, 40, 54)
+df <- df[df[,1] %in% operators, ]
+dim(df)
+```
+
+```{r eval=FALSE}
 View(df)
 ```
 
-TODO: Rename some columns and rows and show different types of visualization.
+
+Reduce the number of columns by removing the unnecessary ones:
+
+```{r eval=ev}
+df <- df[, -c(1:2, 4:7, 9)]
+```
+
+Use abbrevations for agency names:
+
+```{r eval=ev}
+abbr <- c("Central Puget Sound Regional Transit Authority"="ST",
+          "King County Department of Transportation - Metro Transit Division"="KCM",
+          "Everett Transit"="ET",
+          "Kitsap Transit"="KT",
+          "Pierce County Transportation Benefit Area Authority"="PT",
+          "Snohomish County Public Transportation Benefit Area Corporation"="CT",
+          "Pierce County Ferry Operations"="PCF",
+          "City of Seattle - Seattle Center Monorail Transit"="SDOT",
+          "Washington State Ferries"="WSF",
+          "King County Ferry District"="KCF",
+          "King County Department of Transportation"="KCF"
+          )
+df$Agency <- abbr[df$Agency]
+```
+
+Replace the Modes column by aggregated modes and sum values over them. Sort the resulting dataset by agency:
+
+```{r eval=ev}
+modes.lookup <- data.frame(Modes=c("CB","TB","MB", "LR","SR", "CR", 
+                                   "FB", "VP", "MO","MG", "DR","DT"),
+                   AModes=c("bus", "bus", "bus", "light_rail", "light_rail", 
+                           "commuter_rail", "ferry", "vanpool", "monorail", "monorail", 
+                           "demand_reponse", "demand_reponse"))
+modes.lookup
+df <- merge(df, modes.lookup, by="Modes")
+df <- df[,-1]
+df <- aggregate(. ~ AModes+Agency, df, sum)
+df <- df[order(df$Agency),]
+dim(df)
+```
+
+# Basic plots
+
+Time series:
+
+```{r eval=ev}
+busdf <- subset(df, AModes=="bus")
+rownames(busdf) <- busdf$Agency
+busdf <- as.matrix(busdf[,-(1:2)])
+n <- ncol(busdf)
+plot(1:n, busdf["CT",], xlab="time", ylab="", main="UPT bus", 
+     ylim=range(busdf), log="y", type='l') # try type="p" and type="b"
+abline(v=seq(12.5, n, by=12), lty=2)
+text(seq(1, n, by=36), min(busdf), seq(2002, 2017, by=3), pos=4)
+lines(1:n, busdf["ET",], col="blue")
+lines(1:n, busdf["KCM",], col="green")
+```
+
+Box plots, histograms, scatterplots:
+
+```{r eval=ev}
+boxplot(t(busdf))
+hist(busdf["KT",])
+plot(busdf["KT",], busdf["ET",])
+abline(0,1)
+```
+
+# Preparing data for advanced graphics
+
+```{r eval=ev}
+library(reshape2)
+months <- toupper(month.abb)
+result <- NULL
+# iterate over all years
+for(year in 2002:2017) {
+  # columns to extract for one year
+  yearchar <- sprintf("%02d", year-2000)
+  cols <- c("AModes", "Agency", paste0(months, yearchar))
+  # extract only columns present in the dataframe
+  subdf <- df[, cols[cols %in% colnames(df)]]
+  # remove year from the month names
+  colnames(subdf) <- gsub(yearchar, "", colnames(subdf))
+  # convert to long format and add year column
+  subdfl <- melt(subdf, id=c("AModes", "Agency"))
+  subdfl$Year <- year
+  # add to the resulting dataframe
+  result <- rbind(result, subdfl)
+}
+```
+
+
+# Use of Functions
+
+Put the data manipulation tasks from above into a function:
+
+```{r eval=ev}
+process.ntd.dataset <- function(metrics="UPT") {
+  abbr <- c("Central Puget Sound Regional Transit Authority"="ST",
+          "King County Department of Transportation - Metro Transit Division"="KCM",
+          "Everett Transit"="ET",
+          "Kitsap Transit"="KT",
+          "Pierce County Transportation Benefit Area Authority"="PT",
+          "Snohomish County Public Transportation Benefit Area Corporation"="CT",
+          "Pierce County Ferry Operations"="PCF",
+          "City of Seattle - Seattle Center Monorail Transit"="SDOT",
+          "Washington State Ferries"="WSF",
+          "King County Ferry District"="KCF",
+          "King County Department of Transportation"="KCF"
+          )
+  operators <- c(1, 3, 5, 20, 23, 28, 29, 35, 40, 54)
+  modes.lookup <- data.frame(Modes=c("CB","TB","MB", "LR","SR", "CR", 
+                                     "FB", "VP", "MO","MG", "DR","DT"),
+                            AModes=c("bus", "bus", "bus", "light_rail", "light_rail", 
+                                    "commuter_rail", "ferry", "vanpool", "monorail", "monorail", 
+                                    "demand_reponse", "demand_reponse"))
+    
+  ds <- read_excel(ntd.file, sheet=metrics)
+  df <- as.data.frame(ds)
+  
+  df <- df[df[,1] %in% operators, ]
+  df <- df[, -c(1:2, 4:7, 9)]
+  
+  df$Agency <- abbr[df$Agency]
+
+  df <- merge(modes.lookup, df, by="Modes")
+  df <- aggregate(. ~ AModes+Agency, df, sum)
+  return(df)
+}
+
+get.ntd.long <- function(df) {
+  months <- toupper(month.abb)
+  result <- NULL
+  # iterate over all years
+  for(year in 2002:2017) {
+    # columns to extract for one year
+    yearchar <- sprintf("%02d", year-2000)
+    cols <- c("AModes", "Agency", paste0(months, yearchar))
+    # extract only columns present in the dataframe
+    subdf <- df[, cols[cols %in% colnames(df)]]
+    # remove year from the month names
+    colnames(subdf) <- gsub(yearchar, "", colnames(subdf))
+    # convert to long format and add year column
+    subdfl <- melt(subdf, id=c("AModes", "Agency"))
+    subdfl$Year <- year
+    # add to the resulting dataframe
+    result <- rbind(result, subdfl)
+  }
+  return(result)
+}
+```
+
+To create a data frame for the sheet "VRM", do
+
+```{r eval=ev}
+df <- process.ntd.dataset("VRM")
+dfl <- get.ntd.long(df)
+tail(dfl)
+```
