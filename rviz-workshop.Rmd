@@ -1,0 +1,62 @@
+---
+title: "Data Visualization in R"
+output: 
+  html_document:
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ntd.file <- "ntd-monthly-January2017.xls"
+ev <- FALSE
+```
+
+# Setup
+
+Install required packages by
+```{r eval=FALSE}
+install.packages(c("ggplot2", "plotly", "readxl"))
+```
+
+On your file system create a working directory and then navigate into it, e.g.:
+
+```{r eval=FALSE}
+getwd()
+setwd("../rviz-workshop")
+```
+
+# Loading Dataset
+
+We will work with a [dataset from the National Transit Database (NTD)](https://www.transit.dot.gov/ntd/data-product/monthly-module-adjusted-data-release). Define a function that can load such dataset for any month and year:
+
+```{r eval=FALSE}
+download.ntd <- function(month, year) {
+    url <- "https://www.transit.dot.gov/sites/fta.dot.gov/files/"
+    url.file <- paste0(url, month, "%20", year, "%20Adjusted%20Database.xls")
+    local.file <- paste0("ntd-monthly-", month, year, '.xls')
+    download.file(url.file, local.file)
+    return(local.file)
+}
+```
+
+Load an NTD dataset for January 2017:
+
+```{r eval=ev}
+month <- "January"
+year <- 2017
+```
+
+```{r eval=FALSE}
+ntd.file <- download.ntd(month, year)
+```
+
+Read the UPT sheet:
+
+```{r eval=ev, results="hide"}
+library(readxl)
+excel_sheets(ntd.file)
+df <- read_excel(ntd.file, sheet="UPT")
+View(df)
+```
+
+TODO: Rename some columns and rows and show different types of visualization.
