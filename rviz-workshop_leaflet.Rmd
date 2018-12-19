@@ -1,0 +1,137 @@
+---
+title: "Leaflet in R"
+output: 
+  html_document:
+    theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This exercise will take concepts from previous workshops such as manipulating demographic tabular data in excel and combine it with new concepts such as reading in spatial data and producing a choropleth map via [Leaflet for R](https://rstudio.github.io/leaflet/).
+
+# Setup
+
+* Install required packages if they have not already been installed: openxlsx, rgdal, sp, leaflet, RColorBrewer, htmlwidgets
+```{r eval=FALSE}
+install.packages(c("openxlsx", "rgdal", "sp", "leaflet", "RColorBrewer", "htmlwidgets"))
+```
+
+* Load libraries
+```{r eval=FALSE}
+library(openxlsx)
+library(rgdal)
+library(sp)
+library(leaflet)
+library(RColorBrewer)
+library(htmlwidgets)
+```
+
+# Data Manipulation
+
+* Using the ``download.file`` function, download data from the Office of Financial Management (OFM) at the block group level: http://www.ofm.wa.gov/pop/smallarea/data/xlsx/saep_bg10.xlsx
+
+* Read-in the first sheet in the workbook containing Total Population estimates. Note where the row of column names begin. Experiment how changing the argument ``check.names`` to ``TRUE`` changes the column names.
+
+* Subset the data to contain only records from the Puget Sound Region.
+
+* Pare-down table so only select fields are available: 'County Name', 'Census Block Group Code Complete', 'Estimated Total Population 2000' through 'Estimated Total Population 2016'
+
+* Rename fields to something shorter.
+
+# Reading Shapefiles
+
+* Read-in the block group shapefile in the 'W:' drive using the ``readOGR`` function from the rgdal package.
+
+```{r eval=FALSE}
+input.shp.dir <- 'W:/geodata/census/Blockgroup'
+input.shp.name <- 'blockgrp2010'
+bg10.shp <- readOGR(dsn = input.shp.dir, layer = input.shp.name)
+```
+
+* Check if successful:
+    + To get a quick and dirty visual of your shapefile, type in the console: ``plot(bg10.shp)``
+    + To view the attribute table of your spatial object, type the object name followed by ``@data``
+
+
+* Leaflet is particular about projection. Re-project the block group shapefile to the Geographic Coordinate System 'WGS84' using the ``spTransform`` function from the sp package. You will need to use this Coordinate Reference System (CRS) statement as one of its arguments:
+    + ``CRS("+proj=longlat +datum=WGS84")``
+
+```{r eval=FALSE}
+bg10.shp.proj <- spTransform(bg10.shp, CRS("+proj=longlat +datum=WGS84"))
+```
+
+* Join the tabular data to your projected block group object.
+
+# Visualize with Leaflet for R
+You'll find helpful hints on https://rstudio.github.io/leaflet/. The 'Basemap', 'Choropleths' and 'Legends' tabs will help, and you can always type ``?`` followed by a function name to access help via the console.
+
+* Initialize leaflet with your data. You can include a basemap using the ``addProviderTiles`` function. One has been provided in the example below, but you can select a different one from the full set [here](http://leaflet-extras.github.io/leaflet-providers/preview/index.html). 
+```{r eval=FALSE}
+m <- leaflet(data = ) %>%
+  addProviderTiles(providers$Esri.NatGeoWorldMap) %>% 
+  addPolygons()
+
+print(m)
+```
+
+* To color block groups by Total Population for a given year, first define breakpoints to classify your data values. Try using the histogram function ``hist()`` to examine the range and distribution of your estimates.
+
+* Store the breakpoints (including min and max values) in a vector and assign it to object ``bins``. This line should come before your leaflet object.
+
+* To map your bins to colors, use the ``colorBin`` function.
+    + The first argument of the ``colorBin`` function requires a color palette. You can use pre-defined color palettes from the package ``RColorBrewer``. Type ``display.brewer.all()`` or ``brewer.pal.info`` into the console to view your palette options.
+
+* Set the ``colorBin`` function to object ``pal``. This line will also come before your leaflet object.
+
+```{r eval=FALSE}
+bins <- 
+pal <- colorBin(palette =  , bins = bins)
+
+```
+
+* Modify ``addPolygons()`` to include style properties. 
+    + The ``fillColor`` argument will reference your 'pal' object. The column name containing your data values will go inside the parenthesis.
+    + The ``fillOpacity`` argument controls the levels of transparency for ``fillColor``. It accepts a numeric value between 0 and 1.
+    + Experiment with other style properties such as ``stroke`` and ``weight``.
+```{r eval=FALSE}
+
+m <- leaflet(data = ) %>%
+  addProviderTiles(providers$Esri.NatGeoWorldMap) %>% 
+  addPolygons(
+    fillColor = ~pal(),
+    fillOpacity = 1
+  )
+
+print(m)
+```
+
+* You can add layers to your leaflet object by chaining another ``addPolygons()``. See if you can add another layer showing the top 5 block groups with the largest Total Population in 2016. Style their borders with a different color and remove the fill.
+    + create a new spatial object containing only the top 5 block groups.
+    + chain another ``addPolygons()`` and complete the following style property arguments
+    + the ``color`` argument can be set to a [hex code](http://www.colorhexa.com/)
+```{r eval=FALSE}
+  addPolygons(data = ,
+              fill = ,
+              stroke = ,
+              color = ,
+              opacity = 
+  )
+
+```  
+
+* Add a legend
+
+* Additional items that can be added to your map:
+    + a layers control box using the 'addLayersControl' function which allows you to turn layers on and off
+    + pop-up information so that whenever a block group is clicked-on, information such as the population estimate will appear.
+
+* Export your leaflet object as an html file. See the notes from the last [R workshop on Data Visualization](https://rawgit.com/psrc/R-tutorials/master/rviz-workshop.html)
+
+*Extra Credit: in lieu of the layer showing the 5 block groups with the largest Total Population, display 5 block groups with the largest increases in population between 2015-16 and 5 block groups with the largest decreases*
+
+### Additional Resources
+* [Intro to visualising spatial data in R](http://spatial.ly/wp-content/uploads/2013/12/intro-spatial-rl-3.pdf)
+* [Overview of Coordinate Reference Systems in R](https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/OverviewCoordinateReferenceSystems.pdf)
+* [EPSG codes to project shapefiles](http://www.epsg-registry.org/)
